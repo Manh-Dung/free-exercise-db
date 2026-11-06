@@ -33,7 +33,13 @@ ROOT_DIR = os.path.dirname(SCRIPT_DIR)
 # Canonical dataset in this repo. The original script read from a local
 # fitness-app checkout on macOS; this fork now builds straight from dist.
 SOURCE_FILE = os.path.join(ROOT_DIR, "dist", "exercises.json")
-CACHE_FILE = os.path.join(SCRIPT_DIR, "i18n_cache.json")
+CACHE_FILES = sorted(
+    os.path.join(SCRIPT_DIR, f)
+    for f in os.listdir(SCRIPT_DIR)
+    if f.startswith("i18n_cache_") and f.endswith(".json")
+)
+# Legacy single-file cache, kept as a fallback if present.
+LEGACY_CACHE_FILE = os.path.join(SCRIPT_DIR, "i18n_cache.json")
 FORK_DIR = ROOT_DIR  # same repo: dist/ + dist/i18n/ live here
 ALL_LANGS = ["en", "vi", "es", "fr", "de", "ja", "pt", "hi"]
 # Languages translated via the cache (en is the source language).
@@ -535,12 +541,13 @@ def main():
     video_exercises = [e for e in exercises if "video_url" in e]
     print(f"Exercises with video: {len(video_exercises)} (preserving 100%)")
 
-    # Load cache
+    # Load cache (one file per language: i18n_cache_<lang>.json)
     cache = {}
-    if os.path.exists(CACHE_FILE):
-        with open(CACHE_FILE, "r", encoding="utf-8") as f:
-            cache = json.load(f)
-        print(f"Loaded {len(cache)} cached translation strings.")
+    for path in [LEGACY_CACHE_FILE] + CACHE_FILES:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                cache.update(json.load(f))
+    print(f"Loaded {len(cache)} cached translation strings from {len(CACHE_FILES)} cache files.")
 
     # Apply professional i18n
     print("\nApplying professional terminology and localized instruction steps...")
