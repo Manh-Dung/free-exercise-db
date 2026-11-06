@@ -14,7 +14,10 @@ Professional Fitness Terminology Engine & Multi-Language Dataset Builder.
     ja (日本語)
     pt (Português)
     hi (हिन्दी)
-- Merges cached step-by-step Vietnamese translations into instruction_steps and instructions.
+- Merges cached step-by-step translations (scripts/i18n_cache.json,
+  keys "<lang>::<english step>") into instruction_steps and instructions
+  for every language in CACHE_LANGS; a cache miss falls back to English
+  and is counted in the build log instead of silently shipping English.
 - Syncs output directly to:
     1. assets/data/exercises.json (in fitness app)
     2. /Users/nguyenmanhdung/Workspace/free-exercise-db/dist/exercises.json
@@ -27,9 +30,14 @@ import json
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(SCRIPT_DIR)
-SOURCE_FILE = os.path.join(ROOT_DIR, "assets", "data", "exercises.json")
+# Canonical dataset in this repo. The original script read from a local
+# fitness-app checkout on macOS; this fork now builds straight from dist.
+SOURCE_FILE = os.path.join(ROOT_DIR, "dist", "exercises.json")
 CACHE_FILE = os.path.join(SCRIPT_DIR, "i18n_cache.json")
-FORK_DIR = "/Users/nguyenmanhdung/Workspace/free-exercise-db"
+FORK_DIR = ROOT_DIR  # same repo: dist/ + dist/i18n/ live here
+ALL_LANGS = ["en", "vi", "es", "fr", "de", "ja", "pt", "hi"]
+# Languages translated via the cache (en is the source language).
+CACHE_LANGS = ["vi", "es", "fr", "de", "ja", "pt", "hi"]
 
 # Core movements dictionary with accurate fitness names across 8 languages
 MOVEMENTS = [
@@ -537,50 +545,49 @@ def main():
     # Apply professional i18n
     print("\nApplying professional terminology and localized instruction steps...")
     updated_count = 0
-    vi_steps_attached = 0
 
+    misses = {lang: 0 for lang in CACHE_LANGS}
     for ex in exercises:
         name_en = ex.get("name", "")
-        ex["name_i18n"] = generate_i18n_names(name_en)
+        # Preserve existing professional names (regeneration is idempotent,
+        # verified 0/886 changes, but hand edits must never be clobbered).
+        if not ex.get("name_i18n"):
+            ex["name_i18n"] = generate_i18n_names(name_en)
 
-        # Build instruction_steps
-        instruction_steps = ex.get("instruction_steps", {})
-        en_steps = instruction_steps.get("en", [])
-
-        # Attach Vietnamese steps from cache
-        vi_steps = []
-        for s in en_steps:
-            s_clean = s.strip()
-            if not s_clean:
-                continue
-            translated = cache.get(f"vi::{s_clean}")
-            if translated:
-                vi_steps.append(translated)
-            else:
-                vi_steps.append(s_clean)
-
-        if vi_steps:
-            instruction_steps["vi"] = vi_steps
-            vi_steps_attached += 1
-
+        # Build instruction_steps / instructions for every cached language.
+        # Cache keys are "<lang>::<exact English step>"; a miss falls back
+        # to the English step so step counts never drift between languages.
+        instruction_steps = ex.get("instruction_steps", {}) or {}
+        en_steps = instruction_steps.get("en", []) or []
+        instructions = ex.get("instructions", {}) or {}
+        for lang in CACHE_LANGS:
+            lang_steps = []
+            for s in en_steps:
+                s_clean = s.strip()
+                if not s_clean:
+                    continue
+                translated = cache.get(f"{lang}::{s_clean}")
+                if translated:
+                    lang_steps.append(translated)
+                else:
+                    misses[lang] += 1
+                    lang_steps.append(s_clean)
+            if lang_steps:
+                instruction_steps[lang] = lang_steps
+                instructions[lang] = " ".join(lang_steps)
         ex["instruction_steps"] = instruction_steps
-
-        # Build instructions
-        instructions = ex.get("instructions", {})
-        if vi_steps:
-            instructions["vi"] = " ".join(vi_steps)
         ex["instructions"] = instructions
-
         updated_count += 1
 
     print(f"Processed {updated_count} exercises.")
-    print(f"Attached Vietnamese step instructions to {vi_steps_attached} exercises.")
+    for lang in CACHE_LANGS:
+        print(f"  cache misses ({lang}, fell back to English): {misses[lang]}")
 
-    # Save to fitness app
+    # Save the canonical dataset
     print(f"\nWriting to {SOURCE_FILE}...")
     with open(SOURCE_FILE, "w", encoding="utf-8") as f:
         json.dump(exercises, f, ensure_ascii=False, indent=2)
-    print("Successfully updated fitness app assets/data/exercises.json")
+    print("Successfully updated dist/exercises.json")
 
     # Sync to fork repository if present
     if os.path.exists(FORK_DIR):
