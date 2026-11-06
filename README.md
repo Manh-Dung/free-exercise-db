@@ -162,3 +162,20 @@ Contributions are always welcome! Please read the contribution guidelines first.
 ### Special Thanks 🙇
 * [Ollie Jennings](https://github.com/OllieJennings) for the original dataset at [exercises.json](https://github.com/wrkout/exercises.json)
 * flaticon for the favicon see [Sports-and-competition icons created by Dragon Icons - Flaticon](https://www.flaticon.com/free-icons/sports-and-competition)
+
+
+## Multi-Language & Video Assets Support (Fork Enhancements)
+
+This repository fork adds comprehensive internationalization and rich media extensions:
+1. **8 Supported Languages**:
+   - `en` (English - default)
+   - `vi` (Tiếng Việt)
+   - `es` (Español)
+   - `fr` (Français)
+   - `de` (Deutsch)
+   - `ja` (日本語)
+   - `pt` (Português)
+   - `hi` (हिन्दी)
+2. **Standard Terminology**: Professional gym movement nomenclature mapped in `name_i18n`.
+3. **Cloudflare R2 Video & Cues Integration**: 57 top compound and isolation exercises enriched with `video_url`, `video_slug`, form `cues`, `joint_stress`, and mechanics `type`.
+4. **Standalone Language Bundles**: Pre-compiled single-language datasets available in `dist/i18n/exercises_{lang}.json` for zero-overhead mobile app integration.
