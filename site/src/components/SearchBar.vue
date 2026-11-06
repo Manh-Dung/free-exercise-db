@@ -216,7 +216,7 @@ export default {
         <h5 class="mb-2 text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
           {{ exercise.name }}
         </h5>
-        <ExerciseInstructions :text="exercise.instructions" />
+        <ExerciseInstructions :text="exercise.instruction_steps?.en || exercise.instruction_steps?.vi || []" />
       </div>
     </div>
   </div>

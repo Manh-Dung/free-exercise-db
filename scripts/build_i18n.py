@@ -604,10 +604,12 @@ def main():
         os.makedirs(fork_i18n, exist_ok=True)
 
         # 1. Master exercises.json in fork
+        # (skipped when the fork is this repo: SOURCE_FILE was already written above)
         master_dest = os.path.join(fork_dist, "exercises.json")
-        with open(master_dest, "w", encoding="utf-8") as f:
-            json.dump(exercises, f, ensure_ascii=False, indent=2)
-        print(f"  Updated master: {master_dest}")
+        if os.path.abspath(master_dest) != os.path.abspath(SOURCE_FILE):
+            with open(master_dest, "w", encoding="utf-8") as f:
+                json.dump(exercises, f, ensure_ascii=False, indent=2)
+            print(f"  Updated master: {master_dest}")
 
         # 2. Generate 8 standalone per-language bundles in dist/i18n/
         all_langs = ["en", "vi", "es", "fr", "de", "ja", "pt", "hi"]
