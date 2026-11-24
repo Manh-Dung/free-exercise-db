@@ -520,17 +520,50 @@ def generate_i18n_names(name: str):
                 names[lang] = f"{prefix}{val}"
             break
             
-    # 2. If not matched, generate clean fallback names with English in brackets
+    # 2. If not matched, fall back cleanly to original name without noise
     if not matched:
-        names["vi"] = f"{name} (Bài tập thể hình)"
-        names["es"] = f"{name} (Ejercicio)"
-        names["fr"] = f"{name} (Exercice)"
-        names["de"] = f"{name} (Übung)"
-        names["ja"] = f"{name} (エクササイズ)"
-        names["pt"] = f"{name} (Exercício)"
-        names["hi"] = f"{name} (व्यायाम)"
+        for lang in ["vi", "es", "fr", "de", "ja", "pt", "hi"]:
+            names[lang] = name
 
     return names
+
+FIVE_EXERCISES_EN = {
+    "Iron_Cross": [
+        "Stand upright with your feet shoulder-width apart, holding a dumbbell in each hand at your sides.",
+        "Squat down by bending your hips and knees until your thighs are parallel to the floor.",
+        "As you stand back up from the squat, raise both dumbbells straight out to your sides until your arms are parallel to the floor, forming a cross shape with your body.",
+        "Hold the contraction for a moment at the top, then slowly lower the dumbbells back down as you return to the starting position.",
+        "Repeat for the recommended amount of repetitions."
+    ],
+    "One-Arm_Kettlebell_Swings": [
+        "Stand with your feet shoulder-width apart, with a kettlebell placed about a foot in front of you.",
+        "Hinge at your hips and grip the kettlebell handle firmly with one hand, keeping your back flat and chest up.",
+        "Hike the kettlebell back between your legs like a center passing a football.",
+        "Forcefully drive your hips forward and contract your glutes to swing the kettlebell up to chest height.",
+        "Allow the kettlebell to swing back down between your legs by hinging at the hips, absorbing the momentum, and immediately transition into the next repetition."
+    ],
+    "Push_Press": [
+        "Stand with feet shoulder-width apart and rack a barbell across the front of your shoulders, gripping the bar slightly wider than shoulder-width with elbows pointing forward.",
+        "Dip your knees slightly by driving your hips down 2 to 4 inches while keeping your torso upright.",
+        "Explosively extend your hips, knees, and ankles to drive the barbell upward off your shoulders.",
+        "As the bar clears your head, press it out aggressively until your arms are locked out overhead with the bar aligned over your heels.",
+        "Lower the barbell under control back to the front rack position and reset for the next rep."
+    ],
+    "Side_Bridge": [
+        "Lie on your side on the floor with your legs straight and feet stacked or staggered.",
+        "Prop yourself up on your bottom forearm, placing your elbow directly below your shoulder.",
+        "Engage your core and lift your hips off the floor until your body forms a straight diagonal line from your ankles to your head.",
+        "Hold this position for the prescribed duration, keeping your abs tight and glutes contracted.",
+        "Lower your hips slowly back to the floor, switch sides, and repeat."
+    ],
+    "Side_Jackknife": [
+        "Lie on your side with your legs extended straight and stacked on top of each other.",
+        "Place your top hand behind your head and your bottom arm resting on the floor in front of you for balance.",
+        "Simultaneously lift your legs and upper torso off the floor, bringing your top elbow toward your top hip in a lateral crunch.",
+        "Squeeze your obliques at the top of the movement for a brief pause.",
+        "Slowly lower your torso and legs back to the starting position and repeat for the desired number of reps before switching sides."
+    ]
+}
 
 def main():
     print(f"Loading source exercises from {SOURCE_FILE}...")
@@ -558,8 +591,29 @@ def main():
         name_en = ex.get("name", "")
         # Preserve existing professional names (regeneration is idempotent,
         # verified 0/886 changes, but hand edits must never be clobbered).
-        if not ex.get("name_i18n"):
+        # Clean existing noisy fallback suffixes or regenerate if missing
+        if "name_i18n" in ex and isinstance(ex["name_i18n"], dict):
+            for lang, suffix in [
+                ("vi", " (Bài tập thể hình)"),
+                ("es", " (Ejercicio)"),
+                ("fr", " (Exercice)"),
+                ("de", " (Übung)"),
+                ("ja", " (エクササイズ)"),
+                ("pt", " (Exercício)"),
+                ("hi", " (व्यायाम)"),
+            ]:
+                if lang in ex["name_i18n"] and ex["name_i18n"][lang].endswith(suffix):
+                    ex["name_i18n"][lang] = ex["name_i18n"][lang][:-len(suffix)].strip()
+        else:
             ex["name_i18n"] = generate_i18n_names(name_en)
+
+        # Populate missing instructions for 5 exercises
+        ex_id = ex.get("id")
+        if ex_id in FIVE_EXERCISES_EN:
+            if "instruction_steps" not in ex or not ex["instruction_steps"].get("en"):
+                ex["instruction_steps"] = {"en": FIVE_EXERCISES_EN[ex_id]}
+            if "instructions" not in ex or not ex["instructions"].get("en"):
+                ex["instructions"] = {"en": " ".join(FIVE_EXERCISES_EN[ex_id])}
 
         # Build instruction_steps / instructions for every cached language.
         # Cache keys are "<lang>::<exact English step>"; a miss falls back
@@ -584,6 +638,18 @@ def main():
                 instructions[lang] = " ".join(lang_steps)
         ex["instruction_steps"] = instruction_steps
         ex["instructions"] = instructions
+
+        # Build cues_i18n for exercises with cues
+        if "cues" in ex and isinstance(ex["cues"], list) and ex["cues"]:
+            cues_i18n = {"en": list(ex["cues"])}
+            for lang in CACHE_LANGS:
+                cues_i18n[lang] = [
+                    cache.get(f"{lang}::{c.strip()}", c.strip())
+                    for c in ex["cues"]
+                    if c.strip()
+                ]
+            ex["cues_i18n"] = cues_i18n
+
         updated_count += 1
 
     print(f"Processed {updated_count} exercises.")
@@ -628,6 +694,13 @@ def main():
                     item["instruction_steps"] = {lang: ex["instruction_steps"][lang]}
                 elif "en" in ex.get("instruction_steps", {}):
                     item["instruction_steps"] = {"en": ex["instruction_steps"]["en"]}
+
+                # Localized cues for this bundle
+                if "cues" in ex:
+                    if "cues_i18n" in ex and lang in ex["cues_i18n"]:
+                        item["cues"] = ex["cues_i18n"][lang]
+                    elif "cues" in ex:
+                        item["cues"] = ex["cues"]
 
                 bundle.append(item)
 
