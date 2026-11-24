@@ -38722,7 +38722,7 @@
     "level": "intermediate",
     "body_part": "chest",
     "equipment": "dumbbell",
-    "target": "pectorals",
+    "target": "chest",
     "muscle_group": "push",
     "secondary_muscles": [
       "triceps",
@@ -38809,7 +38809,7 @@
       ]
     },
     "mechanic": "compound",
-    "force": null
+    "force": "push"
   },
   {
     "id": "Lateral_Lunge_with_Reach",

@@ -620,9 +620,12 @@ def main():
             if "force" not in ex:
                 ex["force"] = None
 
-        # 3. Normalize level
+        # 3. Normalize level and specific fields
         if ex.get("level") == "advanced":
             ex["level"] = "expert"
+        if ex.get("id") == "Stability_Ball_Dumbbell_Press":
+            ex["target"] = "chest"
+            ex["force"] = "push"
 
         # 4. Populate missing instructions for 5 exercises
         if ex_id in FIVE_EXERCISES_EN:
