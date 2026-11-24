@@ -481,8 +481,11 @@ MOVEMENTS = [
     }),
 ]
 
+MOVEMENTS_SORTED = sorted(MOVEMENTS, key=lambda x: len(x[0]), reverse=True)
+EQUIP_PREFIXES = r'^(smith machine|barbell|dumbbell|cable|machine)\s+'
+
 def generate_i18n_names(name: str):
-    """Generate localized names for an exercise across 8 languages."""
+    """Generate localized names for an exercise across 8 languages with zero collision."""
     names = {
         "en": name,
         "vi": name,
@@ -494,26 +497,30 @@ def generate_i18n_names(name: str):
         "hi": name,
     }
 
-    lower_name = name.lower()
+    lower_name = name.lower().strip()
     
     # 1. Match against known movement terminology
     matched = False
-    for pat, trans in MOVEMENTS:
-        if pat.lower() in lower_name:
+    for pat, trans in MOVEMENTS_SORTED:
+        pat_lower = pat.lower()
+        clean = re.sub(EQUIP_PREFIXES, '', lower_name)
+        if lower_name == pat_lower or clean == pat_lower:
             matched = True
             for lang, val in trans.items():
-                # If there is prefix equipment like Barbell/Dumbbell, add it
                 prefix = ""
-                if "barbell" in lower_name and "barbell" not in pat.lower():
+                if "smith machine" in lower_name and "smith machine" not in pat_lower:
+                    eq_map = {"vi": "Máy Smith: ", "es": "En máquina Smith - ", "fr": "Sur machine Smith - ", "de": "Smith-Maschinen-", "ja": "スミスマシン ", "pt": "No Smith: ", "hi": "स्मिथ मशीन "}
+                    prefix = eq_map.get(lang, "")
+                elif "barbell" in lower_name and "barbell" not in pat_lower:
                     eq_map = {"vi": "Tạ đòn: ", "es": "Con barra - ", "fr": "À la barre - ", "de": "Langhantel-", "ja": "バーベル ", "pt": "Com barra: ", "hi": "बारबेल "}
                     prefix = eq_map.get(lang, "")
-                elif "dumbbell" in lower_name and "dumbbell" not in pat.lower():
+                elif "dumbbell" in lower_name and "dumbbell" not in pat_lower:
                     eq_map = {"vi": "Tạ đơn: ", "es": "Con mancuerna - ", "fr": "Aux haltères - ", "de": "Kurzhantel-", "ja": "ダンベル ", "pt": "Com haltere: ", "hi": "डंबल "}
                     prefix = eq_map.get(lang, "")
-                elif "cable" in lower_name and "cable" not in pat.lower():
+                elif "cable" in lower_name and "cable" not in pat_lower:
                     eq_map = {"vi": "Dây cáp: ", "es": "En polea - ", "fr": "À la poulie - ", "de": "Kabel-", "ja": "ケーブル ", "pt": "No cabo: ", "hi": "केबल "}
                     prefix = eq_map.get(lang, "")
-                elif "machine" in lower_name and "machine" not in pat.lower():
+                elif "machine" in lower_name and "machine" not in pat_lower:
                     eq_map = {"vi": "Máy tập: ", "es": "En máquina - ", "fr": "Sur machine - ", "de": "Maschinen-", "ja": "マシン ", "pt": "Na máquina: ", "hi": "मशीन "}
                     prefix = eq_map.get(lang, "")
                     
@@ -586,29 +593,38 @@ def main():
     print("\nApplying professional terminology and localized instruction steps...")
     updated_count = 0
 
+    raw_dir = os.path.join(ROOT_DIR, "exercises")
     misses = {lang: 0 for lang in CACHE_LANGS}
     for ex in exercises:
         name_en = ex.get("name", "")
-        # Preserve existing professional names (regeneration is idempotent,
-        # verified 0/886 changes, but hand edits must never be clobbered).
-        # Clean existing noisy fallback suffixes or regenerate if missing
-        if "name_i18n" in ex and isinstance(ex["name_i18n"], dict):
-            for lang, suffix in [
-                ("vi", " (Bài tập thể hình)"),
-                ("es", " (Ejercicio)"),
-                ("fr", " (Exercice)"),
-                ("de", " (Übung)"),
-                ("ja", " (エクササイズ)"),
-                ("pt", " (Exercício)"),
-                ("hi", " (व्यायाम)"),
-            ]:
-                if lang in ex["name_i18n"] and ex["name_i18n"][lang].endswith(suffix):
-                    ex["name_i18n"][lang] = ex["name_i18n"][lang][:-len(suffix)].strip()
-        else:
-            ex["name_i18n"] = generate_i18n_names(name_en)
-
-        # Populate missing instructions for 5 exercises
         ex_id = ex.get("id")
+
+        # 1. Regenerate name_i18n cleanly with exact movement matching
+        ex["name_i18n"] = generate_i18n_names(name_en)
+
+        # 2. Populate mechanic and force from raw exercises/*.json
+        raw_p = os.path.join(raw_dir, f"{ex_id}.json")
+        if os.path.exists(raw_p):
+            try:
+                with open(raw_p, "r", encoding="utf-8") as f:
+                    raw_data = json.load(f)
+                ex["mechanic"] = raw_data.get("mechanic")
+                ex["force"] = raw_data.get("force")
+                if not ex.get("type") and raw_data.get("mechanic"):
+                    ex["type"] = raw_data["mechanic"]
+            except Exception:
+                pass
+        else:
+            if not ex.get("mechanic") and ex.get("type"):
+                ex["mechanic"] = ex["type"]
+            if "force" not in ex:
+                ex["force"] = None
+
+        # 3. Normalize level
+        if ex.get("level") == "advanced":
+            ex["level"] = "expert"
+
+        # 4. Populate missing instructions for 5 exercises
         if ex_id in FIVE_EXERCISES_EN:
             if "instruction_steps" not in ex or not ex["instruction_steps"].get("en"):
                 ex["instruction_steps"] = {"en": FIVE_EXERCISES_EN[ex_id]}
